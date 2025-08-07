@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: fmea-postgres
+    environment:
+      POSTGRES_USER: fmea
+      POSTGRES_PASSWORD: fmea_password
+      POSTGRES_DB: fmea_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
