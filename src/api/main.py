@@ -2,8 +2,9 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from ..db.database import get_db
-from . import models, schemas, crud
+# Use absolute imports instead of relative imports
+from src.db.database import get_db
+from src.api import schemas, crud
 
 app = FastAPI(title="FMEA Tracker API")
 
