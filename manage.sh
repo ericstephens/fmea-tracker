@@ -98,6 +98,12 @@ run_tests_db() {
   (cd "$ROOT_DIR" && run_in_conda pytest -q src/db)
 }
 
+migrate_db() {
+  update_conda_env
+  echo "Running Alembic migrations (in conda env '$CONDA_ENV_NAME')..."
+  (cd "$ROOT_DIR" && run_in_conda alembic upgrade head)
+}
+
 usage() {
   cat <<EOF
 FMEA Tracker manage.sh
@@ -110,6 +116,7 @@ Commands:
   restart       Restart local services
   status        Show service status
   logs          Tail service logs
+  migrate       Apply DB migrations (alembic upgrade head)
   test:db       Run database tests (pytest src/db)
   help          Show this help
 EOF
@@ -131,6 +138,9 @@ case "$cmd" in
     ;;
   logs)
     compose_logs
+    ;;
+  migrate)
+    migrate_db
     ;;
   test:db)
     run_tests_db
