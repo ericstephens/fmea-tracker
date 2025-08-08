@@ -43,10 +43,17 @@ def engine() -> Iterator:
 
 @pytest.fixture()
 def db_session(engine) -> Iterator[Session]:
+    # Use a connection-level transaction for proper test isolation
+    connection = engine.connect()
+    transaction = connection.begin()
+    
     SessionLocal = get_session_factory()
-    session: Session = SessionLocal()
+    session: Session = SessionLocal(bind=connection)
+    
     try:
         yield session
-        session.rollback()  # ensure isolation between tests
+        # Don't commit - let the transaction rollback for isolation
     finally:
         session.close()
+        transaction.rollback()  # Always rollback to ensure test isolation
+        connection.close()

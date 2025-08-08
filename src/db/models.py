@@ -15,6 +15,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKeyConstraint
 
 
 class Base(DeclarativeBase):
@@ -39,9 +40,25 @@ class FMEA(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+    # Lifecycle / governance
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="draft", server_default="draft"
+    )
+    approved_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    supersedes_fmea_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("fmeas.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     __table_args__ = (
         UniqueConstraint("asset_id", "version", name="uq_fmea_asset_version"),
+        CheckConstraint(
+            "status IN ('draft','review','approved','superseded')",
+            name="ck_fmeas_status_valid",
+        ),
     )
 
 
@@ -208,3 +225,4 @@ class Control(Base):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Control id={self.id} fm_id={self.failure_mode_id} type={self.type}>"
+
