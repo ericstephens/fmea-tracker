@@ -10,6 +10,8 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     UniqueConstraint,
+    CheckConstraint,
+    Computed,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -53,16 +55,28 @@ class FailureMode(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     severity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    occurrence: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    detection: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    # rpn as a generated stored column in Postgres
+    rpn: Mapped[int] = mapped_column(
+        Integer,
+        Computed("(severity * occurrence * detection)", persisted=True),
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
         UniqueConstraint("fmea_id", "name", name="uq_failure_mode_fmea_name"),
+        CheckConstraint("severity BETWEEN 1 AND 10", name="ck_failure_modes_severity_range"),
+        CheckConstraint("occurrence BETWEEN 1 AND 10", name="ck_failure_modes_occurrence_range"),
+        CheckConstraint("detection BETWEEN 1 AND 10", name="ck_failure_modes_detection_range"),
     )
 
     def __repr__(self) -> str:  # pragma: no cover
         return (
             f"<FailureMode id={self.id} fmea_id={self.fmea_id} "
-            f"name={self.name!r} severity={self.severity}>"
+            f"name={self.name!r} severity={self.severity} "
+            f"occurrence={self.occurrence} detection={self.detection} rpn={self.rpn}>"
         )
