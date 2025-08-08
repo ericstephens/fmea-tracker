@@ -80,6 +80,21 @@ class FailureMode(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    causes: Mapped[list["FailureCause"]] = relationship(
+        back_populates="failure_mode",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    effects: Mapped[list["FailureEffect"]] = relationship(
+        back_populates="failure_mode",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    controls: Mapped[list["Control"]] = relationship(
+        back_populates="failure_mode",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return (
@@ -122,3 +137,74 @@ class Action(Base):
             f"<Action id={self.id} failure_mode_id={self.failure_mode_id} "
             f"status={self.status!r} owner={self.owner!r} due_date={self.due_date}>"
         )
+
+
+class FailureCause(Base):
+    __tablename__ = "failure_causes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    failure_mode_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("failure_modes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    failure_mode: Mapped[FailureMode] = relationship(back_populates="causes")
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<FailureCause id={self.id} fm_id={self.failure_mode_id}>"
+
+
+class FailureEffect(Base):
+    __tablename__ = "failure_effects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    failure_mode_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("failure_modes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    failure_mode: Mapped[FailureMode] = relationship(back_populates="effects")
+
+    __table_args__ = (
+        CheckConstraint(
+            "level IS NULL OR level IN ('local','next_higher','end_user')",
+            name="ck_failure_effects_level_valid",
+        ),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<FailureEffect id={self.id} fm_id={self.failure_mode_id} level={self.level}>"
+
+
+class Control(Base):
+    __tablename__ = "controls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    failure_mode_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("failure_modes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    type: Mapped[str] = mapped_column(String(16), nullable=False)  # prevention/detection
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    method_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    failure_mode: Mapped[FailureMode] = relationship(back_populates="controls")
+
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('prevention','detection')",
+            name="ck_controls_type_valid",
+        ),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<Control id={self.id} fm_id={self.failure_mode_id} type={self.type}>"
