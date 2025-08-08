@@ -14,7 +14,7 @@ from sqlalchemy import (
     Computed,
     func,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -74,9 +74,51 @@ class FailureMode(Base):
         CheckConstraint("detection BETWEEN 1 AND 10", name="ck_failure_modes_detection_range"),
     )
 
+    # Relationship to actions (for convenience; not strictly required for tests)
+    actions: Mapped[list["Action"]] = relationship(
+        back_populates="failure_mode",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     def __repr__(self) -> str:  # pragma: no cover
         return (
             f"<FailureMode id={self.id} fmea_id={self.fmea_id} "
             f"name={self.name!r} severity={self.severity} "
             f"occurrence={self.occurrence} detection={self.detection} rpn={self.rpn}>"
+        )
+
+
+class Action(Base):
+    __tablename__ = "actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    failure_mode_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("failure_modes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="open"
+    )  # open, in_progress, closed, deferred
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    failure_mode: Mapped[FailureMode] = relationship(back_populates="actions")
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open','in_progress','closed','deferred')",
+            name="ck_actions_status_valid",
+        ),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return (
+            f"<Action id={self.id} failure_mode_id={self.failure_mode_id} "
+            f"status={self.status!r} owner={self.owner!r} due_date={self.due_date}>"
         )
