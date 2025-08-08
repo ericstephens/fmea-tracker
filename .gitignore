@@ -1,96 +1,60 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-.hypothesis/
+*.pyo
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Node.js / Frontend
-node_modules/
-npm-debug.log
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-.npm
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Conda
-.conda/
-
-# IDE specific files
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
-
-# Database
-*.sqlite3
-*.db
-
-# Environment variables
+# Environments
 .env
-.env.local
-.env.development
-.env.test
-.env.production
-
-# Logs
-logs/
-*.log
-
-# Local development
-.history/
+.env.*
+!.env.example
+!src/db/.env.example
 .venv/
 venv/
-ENV/
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
+# Conda/virtual env caches
+.conda/
+.python-version
 
-# testing
-/coverage
+# Pytest
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
-# production
-/build
+# Type checkers / linters
+.mypy_cache/
+.pytype/
+.ruff_cache/
 
-# misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Node/Frontend
+node_modules/
+*.log
+
+# IDE/editor
+.vscode/
+.idea/
+*.iml
+
+# Local data / volumes
+pgdata/
+
+# Podman/Compose
+*.pid
+*.log
+
+# OS/other
+Thumbs.db
+Desktop.ini

@@ -1,34 +1,36 @@
+from __future__ import annotations
+
+from contextlib import contextmanager
+from typing import Iterator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-import os
-from dotenv import load_dotenv
+from sqlalchemy.orm import Session, sessionmaker
 
-# Load environment variables
-load_dotenv()
+from .config import load_db_config
 
-# Database connection settings
-DB_USER = os.getenv("DB_USER", "fmea")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "fmea_password")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "fmea_db")
+# Create SQLAlchemy engine and session factory based on environment configuration
+_config = load_db_config()
+_engine = create_engine(_config.sqlalchemy_url, pool_pre_ping=True, future=True)
+_SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False, future=True, expire_on_commit=False)
 
-# Create database URL
-SQLALCHEMY_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-# Create engine
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+def get_engine():
+    return _engine
 
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create base class for models
-Base = declarative_base()
+def get_session_factory():
+    return _SessionLocal
 
-# Function to get database session
-def get_db():
-    db = SessionLocal()
+
+@contextmanager
+def get_session() -> Iterator[Session]:
+    """Provide a transactional scope around a series of operations."""
+    session: Session = _SessionLocal()
     try:
-        yield db
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
     finally:
-        db.close()
+        session.close()

@@ -1,130 +1,147 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# FMEA Tracker Application Management Script
-# This script handles start, stop, restart operations for the application
+# FMEA Tracker management script
+# Controls local services and dev tasks per project rules.
+# Requires: podman, podman-compose, pytest
 
-set -e
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DB_COMPOSE_FILE="$ROOT_DIR/src/db/podman-compose.yml"
+ENV_FILE="$ROOT_DIR/environment.yaml"
+CONDA_ENV_NAME="fmea-tracker"
 
-# Set environment variables
-export PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export CONDA_ENV_NAME="fmea-tracker"
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Error: required command '$1' not found in PATH" >&2
+    exit 1
+  fi
+}
 
-# Function to check if conda environment exists
-check_conda_env() {
-    if ! conda info --envs | grep -q "$CONDA_ENV_NAME"; then
-        echo "Conda environment '$CONDA_ENV_NAME' does not exist. Creating it..."
-        conda env create -f "$PROJECT_ROOT/environment.yaml"
-    else
-        echo "Updating conda environment..."
-        conda env update -f "$PROJECT_ROOT/environment.yaml"
+ensure_podman_machine() {
+  require_cmd podman
+  # If machine subcommand exists, ensure it's running
+  if podman machine --help >/dev/null 2>&1; then
+    # If there are no machines at all, create the default
+    local machine_count
+    machine_count=$(podman machine list --noheading --quiet 2>/dev/null | wc -l | tr -d ' ')
+    if [ "${machine_count:-0}" -eq 0 ]; then
+      echo "Creating default podman machine..."
+      podman machine init
     fi
-}
 
-# Function to start PostgreSQL container
-start_db() {
-    echo "Starting PostgreSQL container..."
-    if ! podman container exists fmea-postgres; then
-        podman run -d \
-            --name fmea-postgres \
-            -e POSTGRES_USER=fmea \
-            -e POSTGRES_PASSWORD=fmea_password \
-            -e POSTGRES_DB=fmea_db \
-            -p 5432:5432 \
-            postgres:15
-        
-        # Wait for PostgreSQL to start
-        echo "Waiting for PostgreSQL to start..."
-        sleep 5
-    else
-        podman start fmea-postgres
+    # If no machine is running, start the default (no name implies default)
+    if ! podman machine list --format json 2>/dev/null | grep -q '"Running": true'; then
+      echo "Starting podman machine..."
+      podman machine start || true
     fi
+  fi
 }
 
-# Function to start API server
-start_api() {
-    echo "Starting API server..."
-    conda run -n "$CONDA_ENV_NAME" uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000 &
-    echo $! > "$PROJECT_ROOT/.api.pid"
+# -----------------------------
+# Conda environment management
+# -----------------------------
+ensure_conda_available() {
+  require_cmd conda
 }
 
-# Function to start Frontend
-start_frontend() {
-    echo "Starting Frontend..."
-    cd "$PROJECT_ROOT/src/frontend" && npm start &
-    echo $! > "$PROJECT_ROOT/.frontend.pid"
+update_conda_env() {
+  ensure_conda_available
+  if [ -f "$ENV_FILE" ]; then
+    echo "Updating conda environment ($CONDA_ENV_NAME) from $ENV_FILE..."
+    conda env update -f "$ENV_FILE" --prune || {
+      echo "Warning: failed to update conda env. Continuing may fail if deps are missing." >&2
+    }
+  else
+    echo "Warning: $ENV_FILE not found; skipping conda env update." >&2
+  fi
 }
 
-# Function to stop API server
-stop_api() {
-    if [ -f "$PROJECT_ROOT/.api.pid" ]; then
-        echo "Stopping API server..."
-        PID=$(cat "$PROJECT_ROOT/.api.pid")
-        if ps -p $PID > /dev/null; then
-            kill $PID
-        fi
-        rm "$PROJECT_ROOT/.api.pid"
-    fi
+run_in_conda() {
+  ensure_conda_available
+  conda run -n "$CONDA_ENV_NAME" "$@"
 }
 
-# Function to stop Frontend
-stop_frontend() {
-    if [ -f "$PROJECT_ROOT/.frontend.pid" ]; then
-        echo "Stopping Frontend..."
-        PID=$(cat "$PROJECT_ROOT/.frontend.pid")
-        if ps -p $PID > /dev/null; then
-            kill $PID
-        fi
-        rm "$PROJECT_ROOT/.frontend.pid"
-    fi
+compose_up() {
+  require_cmd podman-compose
+  ensure_podman_machine
+  echo "Starting services (DB) with podman-compose..."
+  podman-compose -f "$DB_COMPOSE_FILE" up -d
 }
 
-# Function to stop PostgreSQL container
-stop_db() {
-    echo "Stopping PostgreSQL container..."
-    if podman container exists fmea-postgres; then
-        podman stop fmea-postgres
-    fi
+compose_down() {
+  require_cmd podman-compose
+  ensure_podman_machine
+  echo "Stopping services (DB) with podman-compose..."
+  podman-compose -f "$DB_COMPOSE_FILE" down
 }
 
-# Start all components
-start() {
-    check_conda_env
-    start_db
-    start_api
-    start_frontend
-    echo "All components started successfully!"
+compose_restart() {
+  compose_down
+  compose_up
 }
 
-# Stop all components
-stop() {
-    stop_frontend
-    stop_api
-    stop_db
-    echo "All components stopped successfully!"
+compose_logs() {
+  require_cmd podman-compose
+  ensure_podman_machine
+  podman-compose -f "$DB_COMPOSE_FILE" logs -f --tail=200
 }
 
-# Restart all components
-restart() {
-    echo "Restarting all components..."
-    stop
-    start
+compose_ps() {
+  require_cmd podman-compose
+  ensure_podman_machine
+  podman-compose -f "$DB_COMPOSE_FILE" ps
 }
 
-# Main script logic
-case "$1" in
-    start)
-        start
-        ;;
-    stop)
-        stop
-        ;;
-    restart)
-        restart
-        ;;
-    *)
-        echo "Usage: $0 {start|stop|restart}"
-        exit 1
-        ;;
+run_tests_db() {
+  update_conda_env
+  echo "Running DB tests (in conda env '$CONDA_ENV_NAME')..."
+  (cd "$ROOT_DIR" && run_in_conda pytest -q src/db)
+}
+
+usage() {
+  cat <<EOF
+FMEA Tracker manage.sh
+
+Usage: $0 <command>
+
+Commands:
+  start         Start local services (PostgreSQL via Podman Compose)
+  stop          Stop local services
+  restart       Restart local services
+  status        Show service status
+  logs          Tail service logs
+  test:db       Run database tests (pytest src/db)
+  help          Show this help
+EOF
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  start)
+    compose_up
+    ;;
+  stop)
+    compose_down
+    ;;
+  restart)
+    compose_restart
+    ;;
+  status)
+    compose_ps
+    ;;
+  logs)
+    compose_logs
+    ;;
+  test:db)
+    run_tests_db
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    echo >&2
+    usage
+    exit 1
+    ;;
 esac
-
-exit 0
