@@ -13,8 +13,6 @@ def test_fmea_version_uniqueness(db_session):
     fmea_v2 = FMEA(asset_id="asset-123", title="Engine FMEA v2", version=2)
     db_session.add_all([fmea_v1, fmea_v2])
     db_session.flush()
-    # Persist the valid rows so subsequent rollback doesn't remove them
-    db_session.commit()
 
     # Attempt to insert a duplicate version for the same asset should fail
     dup = FMEA(asset_id="asset-123", title="Duplicate v1", version=1)
@@ -24,7 +22,13 @@ def test_fmea_version_uniqueness(db_session):
     # Reset failed transaction state before proceeding
     db_session.rollback()
 
-    # But same version for different asset is fine (fresh insert after rollback)
+    # Re-add the valid records after rollback
+    fmea_v1 = FMEA(asset_id="asset-123", title="Engine FMEA v1", version=1)
+    fmea_v2 = FMEA(asset_id="asset-123", title="Engine FMEA v2", version=2)
+    db_session.add_all([fmea_v1, fmea_v2])
+    db_session.flush()
+
+    # But same version for different asset is fine
     other = FMEA(asset_id="asset-999", title="Other asset v1", version=1)
     db_session.add(other)
     db_session.flush()
