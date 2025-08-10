@@ -55,5 +55,7 @@ def db_session(engine) -> Iterator[Session]:
         # Don't commit - let the transaction rollback for isolation
     finally:
         session.close()
-        transaction.rollback()  # Always rollback to ensure test isolation
+        # Only rollback if transaction is still active
+        if transaction.is_active:
+            transaction.rollback()
         connection.close()
