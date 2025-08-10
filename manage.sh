@@ -104,6 +104,18 @@ migrate_db() {
   (cd "$ROOT_DIR" && run_in_conda alembic upgrade head)
 }
 
+run_tests_api() {
+  update_conda_env
+  echo "Running API tests (in conda env '$CONDA_ENV_NAME')..."
+  (cd "$ROOT_DIR" && run_in_conda pytest -q src/api/tests)
+}
+
+start_api() {
+  update_conda_env
+  echo "Starting API server (in conda env '$CONDA_ENV_NAME')..."
+  (cd "$ROOT_DIR" && run_in_conda uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload)
+}
+
 usage() {
   cat <<EOF
 FMEA Tracker manage.sh
@@ -118,6 +130,8 @@ Commands:
   logs          Tail service logs
   migrate       Apply DB migrations (alembic upgrade head)
   test:db       Run database tests (pytest src/db)
+  test:api      Run API tests (pytest src/api/tests)
+  api           Start API development server (uvicorn with reload)
   help          Show this help
 EOF
 }
@@ -144,6 +158,12 @@ case "$cmd" in
     ;;
   test:db)
     run_tests_db
+    ;;
+  test:api)
+    run_tests_api
+    ;;
+  api)
+    start_api
     ;;
   help|--help|-h)
     usage
